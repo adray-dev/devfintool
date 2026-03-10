@@ -131,6 +131,17 @@ with st.sidebar:
         help="Enter a street address, parcel ID/APN, or lat/lon coordinates. "
              "Avoid neighborhood or city names alone — the more specific, the better the research.",
     )
+    lot_size_input = st.text_input(
+        "Lot Size (acres)",
+        placeholder="e.g. 0.5  — leave blank to look up from records",
+        key="lot_size_input",
+    )
+    try:
+        lot_size_acres = float(lot_size_input) if lot_size_input.strip() else None
+    except ValueError:
+        lot_size_acres = None
+        if lot_size_input.strip():
+            st.warning("Lot size must be a number (e.g. 0.5).")
 
     site_ok = _is_specific_enough(loc_site)
     if loc_site and not site_ok:
@@ -229,8 +240,14 @@ if run_button or (needs_refresh and "research_cache" not in st.session_state):
 
     progress = st.progress(0, text="Starting research...")
 
-    research_steps = [
-        ("Looking up parcel data...",                lambda: research_parcel(location, loc_site)),
+    research_steps = []
+    result_keys = []
+
+    if lot_size_acres is None:
+        research_steps.append(("Looking up parcel data...", lambda: research_parcel(location, loc_site)))
+        result_keys.append("parcel")
+
+    research_steps += [
         ("Researching zoning regulations...",        lambda: research_zoning(location, building_type)),
         ("Researching land costs...",                lambda: research_land_costs(location, building_type)),
         ("Researching construction costs...",        lambda: research_construction_costs(location, building_type)),
@@ -241,9 +258,8 @@ if run_button or (needs_refresh and "research_cache" not in st.session_state):
         ("Researching operating expense benchmarks...", lambda: research_opex_benchmarks(use_type, building_type)),
         ("Researching employment & demand signals...", lambda: research_employment_and_demand(location)),
     ]
-
-    result_keys = ["parcel", "zoning", "land", "construction", "rents", "cap_rates",
-                   "interest_rates", "tax_rates", "opex", "employment"]
+    result_keys += ["zoning", "land", "construction", "rents", "cap_rates",
+                    "interest_rates", "tax_rates", "opex", "employment"]
 
     if use_type == "Affordable / LIHTC":
         ami_levels = [int(k.replace("% AMI", "")) for k in affordability_mix if k != "Market"]
@@ -296,11 +312,14 @@ if run_button or (needs_refresh and "research_cache" not in st.session_state):
             key, result = future.result()
             assumptions[key] = result
 
-    # Extract parcel size from research and compute unit count
-    _p_item = assumptions.get("parcel", {}).get("parcel_area_acres", {})
-    _p_val  = _p_item.get("value") if isinstance(_p_item, dict) else _p_item
-    parcel_acres = float(_p_val) if _p_val else 1.0
-    num_units    = max(1, round(UNITS_PER_ACRE[building_type] * parcel_acres))
+    # Determine parcel size: user input takes priority over research lookup
+    if lot_size_acres is not None:
+        parcel_acres = lot_size_acres
+    else:
+        _p_item = assumptions.get("parcel", {}).get("parcel_area_acres", {})
+        _p_val  = _p_item.get("value") if isinstance(_p_item, dict) else _p_item
+        parcel_acres = float(_p_val) if _p_val else 1.0
+    num_units = max(1, round(UNITS_PER_ACRE[building_type] * parcel_acres))
     user_inputs["parcel_acres"] = parcel_acres
     user_inputs["num_units"]    = num_units
 
