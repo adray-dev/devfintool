@@ -541,11 +541,9 @@ with tab_results:
         f"{user_inputs.get('building_type', '')}"
     )
 
-    # Feasibility rationale (first sentence only — no demographics)
     verdict = results.get("verdict_explanation", "")
-    # Keep only the first sentence (ends at first period followed by space or end)
-    first_sentence = verdict.split(". ")[0].rstrip(".") + "."
-    st.markdown(f"*{first_sentence}*")
+    if verdict:
+        st.markdown(f"*{verdict.strip()}*")
 
     st.divider()
 
