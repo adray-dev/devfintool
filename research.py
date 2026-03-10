@@ -532,77 +532,38 @@ Return a JSON object:
 def research_market_batch(location: str, building_type: str, use_type: str, unit_mix: dict) -> dict:
     """
     Single call covering all location-specific market data.
-    Uses 3 web searches: (1) current rents, (2) zoning code, (3) cap rates + land costs.
+    Uses up to 3 web searches: rents, zoning, cap rates/land.
+    If a search finds nothing quickly, falls back to training data immediately.
     Returns dict with keys: rents, cap_rates, zoning, land, tax_rates.
     """
     unit_list = ", ".join(ut for ut, pct in unit_mix.items() if pct > 0) or "Studio, 1BR, 2BR, 3BR"
     prompt = f"""
-Research real estate market data for a {building_type} {use_type} development in {location} as of {TODAY}.
+Research market data for a {building_type} {use_type} development in {location} as of {TODAY}.
 
-Use your 3 web searches as follows:
-- Search 1: Current apartment asking rents in {location} — search Apartments.com, Zillow, or Redfin for "{location} apartments for rent {building_type}"
-- Search 2: Local zoning code for {location} — search the city/county municipal code or planning department for "{location} zoning code {building_type} FAR height parking"
-- Search 3: Cap rates and recent land sales in {location} — search CBRE, JLL, CoStar, or LoopNet for "{location} multifamily cap rate land sale 2024 2025"
+Perform up to 3 focused searches — stop each search as soon as you have the data; do not retry if a search yields no results, just use your best estimate:
+1. "{location} {building_type} apartments rent average" — get current asking rents
+2. "{location} zoning code {building_type} FAR parking" — get zoning parameters
+3. "{location} multifamily cap rate 2024 2025" — get cap rates and land costs
 
-Fill in source_url and source_name with the ACTUAL URL and site name you found each value from.
-Use null for source_url only if you could not find a real source.
+For each value: if found via search, set source_url to the real URL; if using an estimate, set source_url to null.
 
-Return a JSON object with exactly these five top-level keys:
-{{
-  "rents": {{
-    "studio":        {{"value": <$/month or null>, "unit": "$/month",  "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": "from search"}},
-    "1br":           {{"value": <$/month or null>, "unit": "$/month",  "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "2br":           {{"value": <$/month or null>, "unit": "$/month",  "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "3br":           {{"value": <$/month or null>, "unit": "$/month",  "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "4br":           {{"value": <$/month or null>, "unit": "$/month",  "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "studio_avg_sf": {{"value": <SF>,   "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
-    "1br_avg_sf":    {{"value": <SF>,   "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
-    "2br_avg_sf":    {{"value": <SF>,   "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
-    "3br_avg_sf":    {{"value": <SF>,   "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
-    "4br_avg_sf":    {{"value": <SF>,   "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
-    "vacancy_rate":  {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}}
-  }},
-  "cap_rates": {{
-    "cap_rate":            {{"value": <decimal>, "unit": "decimal", "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "cap_rate_range_low":  {{"value": <decimal>, "unit": "decimal", "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "cap_rate_range_high": {{"value": <decimal>, "unit": "decimal", "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": ""}}
-  }},
-  "zoning": {{
-    "max_far":           {{"value": <number>, "unit": "ratio",       "source_url": "<municipal code URL or null>", "source_name": "<city/county code site>", "date_retrieved": "{TODAY}", "notes": "zoning district if known"}},
-    "max_height_stories":{{"value": <number>, "unit": "stories",     "source_url": "<municipal code URL or null>", "source_name": "<city/county code site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "parking_studio":    {{"value": <number>, "unit": "spaces/unit", "source_url": "<municipal code URL or null>", "source_name": "<city/county code site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "parking_1br":       {{"value": <number>, "unit": "spaces/unit", "source_url": "<municipal code URL or null>", "source_name": "<city/county code site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "parking_2br":       {{"value": <number>, "unit": "spaces/unit", "source_url": "<municipal code URL or null>", "source_name": "<city/county code site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "parking_3br":       {{"value": <number>, "unit": "spaces/unit", "source_url": "<municipal code URL or null>", "source_name": "<city/county code site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "setback_front_ft":  {{"value": <number>, "unit": "feet",        "source_url": "<municipal code URL or null>", "source_name": "<city/county code site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "setback_side_ft":   {{"value": <number>, "unit": "feet",        "source_url": "<municipal code URL or null>", "source_name": "<city/county code site>", "date_retrieved": "{TODAY}", "notes": ""}},
-    "setback_rear_ft":   {{"value": <number>, "unit": "feet",        "source_url": "<municipal code URL or null>", "source_name": "<city/county code site>", "date_retrieved": "{TODAY}", "notes": ""}}
-  }},
-  "land": {{
-    "land_cost_per_sf":   {{"value": <number>, "unit": "$/land SF", "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": "recent comparable sales"}},
-    "land_cost_per_acre": {{"value": <number>, "unit": "$/acre",    "source_url": "<real URL or null>", "source_name": "<site>", "date_retrieved": "{TODAY}", "notes": ""}}
-  }},
-  "tax_rates": {{
-    "effective_tax_rate": {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "state/county estimate", "date_retrieved": "{TODAY}", "notes": ""}},
-    "mill_rate":          {{"value": <mills or null>, "unit": "mills", "source_url": null, "source_name": "state/county estimate", "date_retrieved": "{TODAY}", "notes": ""}},
-    "assessment_ratio":   {{"value": <decimal or null>, "unit": "decimal", "source_url": null, "source_name": "state/county estimate", "date_retrieved": "{TODAY}", "notes": ""}}
-  }}
-}}
-Unit types needed for rents: {unit_list}
+Return JSON with these five keys (fill every field — never omit a key):
+{{"rents":{{"studio":{{"value":<$>,"unit":"$/month","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"1br":{{"value":<$>,"unit":"$/month","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"2br":{{"value":<$>,"unit":"$/month","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"3br":{{"value":<$>,"unit":"$/month","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"4br":{{"value":<$>,"unit":"$/month","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}},"studio_avg_sf":{{"value":<SF>,"unit":"SF","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}},"1br_avg_sf":{{"value":<SF>,"unit":"SF","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}},"2br_avg_sf":{{"value":<SF>,"unit":"SF","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}},"3br_avg_sf":{{"value":<SF>,"unit":"SF","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}},"4br_avg_sf":{{"value":<SF>,"unit":"SF","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}},"vacancy_rate":{{"value":<0.05>,"unit":"decimal","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}}}},"cap_rates":{{"cap_rate":{{"value":<decimal>,"unit":"decimal","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"cap_rate_range_low":{{"value":<decimal>,"unit":"decimal","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"cap_rate_range_high":{{"value":<decimal>,"unit":"decimal","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}}}},"zoning":{{"max_far":{{"value":<number>,"unit":"ratio","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":"district if known"}},"max_height_stories":{{"value":<number>,"unit":"stories","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"parking_studio":{{"value":<number>,"unit":"spaces/unit","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"parking_1br":{{"value":<number>,"unit":"spaces/unit","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"parking_2br":{{"value":<number>,"unit":"spaces/unit","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"parking_3br":{{"value":<number>,"unit":"spaces/unit","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"setback_front_ft":{{"value":<number>,"unit":"feet","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"setback_side_ft":{{"value":<number>,"unit":"feet","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"setback_rear_ft":{{"value":<number>,"unit":"feet","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}}}},"land":{{"land_cost_per_sf":{{"value":<number>,"unit":"$/land SF","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}},"land_cost_per_acre":{{"value":<number>,"unit":"$/acre","source_url":<url>,"source_name":"<site>","date_retrieved":"{TODAY}","notes":""}}}},"tax_rates":{{"effective_tax_rate":{{"value":<decimal>,"unit":"decimal","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}},"mill_rate":{{"value":null,"unit":"mills","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}},"assessment_ratio":{{"value":null,"unit":"decimal","source_url":null,"source_name":"estimate","date_retrieved":"{TODAY}","notes":""}}}}}}
+Unit types: {unit_list}
 """
-    return _run_research(prompt, web_search=True, max_uses=3, max_tokens=3000)
+    return _run_research(prompt, web_search=True, max_uses=3, max_tokens=2000)
 
 
 def research_general_batch(location: str, building_type: str, use_type: str) -> dict:
     """
-    Single call: construction, opex, interest_rates, employment.
+    Single call: construction, opex, interest_rates.
     No web search — uses Claude's training knowledge.
-    Returns dict with keys: construction, opex, interest_rates, employment.
+    Returns dict with keys: construction, opex, interest_rates.
     """
     prompt = f"""
 Based on your knowledge, provide financial benchmarks for a {building_type} {use_type} development in {location} as of 2024-2025.
 
-Return a JSON object with exactly these four keys:
+Return a JSON object with exactly these three keys:
 {{
   "construction": {{
     "hard_cost_per_gsf":            {{"value": <$/GSF>,  "unit": "$/GSF",   "source_url": null, "source_name": "RSMeans/industry", "date_retrieved": "{TODAY}", "notes": "regional estimate"}},
@@ -624,15 +585,6 @@ Return a JSON object with exactly these four keys:
     "construction_loan_rate":      {{"value": <sofr+0.025>,"unit": "decimal","source_url": null,"source_name": "industry",    "date_retrieved": "{TODAY}", "notes": "SOFR+250bps"}},
     "perm_loan_spread_bps":        {{"value": <number>,  "unit": "bps",    "source_url": null, "source_name": "industry",     "date_retrieved": "{TODAY}", "notes": ""}},
     "perm_loan_rate":              {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "industry",     "date_retrieved": "{TODAY}", "notes": ""}}
-  }},
-  "employment": {{
-    "top_sectors": [{{"sector": "...", "employment_count": null, "source_url": null, "source_name": "BLS estimate", "date_retrieved": "{TODAY}", "notes": ""}}],
-    "job_growth_rate_annual":  {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "BLS estimate",    "date_retrieved": "{TODAY}", "notes": ""}},
-    "unemployment_rate":       {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "BLS estimate",    "date_retrieved": "{TODAY}", "notes": ""}},
-    "median_household_income": {{"value": <$>,       "unit": "$/year",  "source_url": null, "source_name": "Census estimate", "date_retrieved": "{TODAY}", "notes": ""}},
-    "median_wage":             {{"value": <$>,       "unit": "$/year",  "source_url": null, "source_name": "BLS estimate",    "date_retrieved": "{TODAY}", "notes": ""}},
-    "notable_employers": [{{"name": "...", "note": "major employer", "source_url": null, "date_retrieved": "{TODAY}"}}],
-    "demand_narrative":        {{"value": "...",     "unit": "text",    "source_url": null, "source_name": "market knowledge","date_retrieved": "{TODAY}", "notes": ""}}
   }}
 }}
 """

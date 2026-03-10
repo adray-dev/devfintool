@@ -256,7 +256,7 @@ if run_button:
     # Unpack batch results into assumptions
     for key in ("rents", "cap_rates", "zoning", "land", "tax_rates"):
         assumptions[key] = market_data.get(key, {})
-    for key in ("construction", "opex", "interest_rates", "employment"):
+    for key in ("construction", "opex", "interest_rates"):
         assumptions[key] = general_data.get(key, {})
 
     # --- Parcel lookup (only if lot size not provided) ---
@@ -561,24 +561,23 @@ with tab_results:
   </div>
   <div style="background:#e9ecef;border-radius:6px;height:28px;position:relative;overflow:visible;">
     <div style="background:{bar_color};width:{actual_pct:.1f}%;height:100%;border-radius:6px;position:absolute;top:0;left:0;"></div>
-    <div style="background:#333;width:3px;height:40px;position:absolute;left:{needed_pct:.1f}%;top:-6px;border-radius:2px;"></div>
-    <div style="position:absolute;left:calc({needed_pct:.1f}% + 6px);top:-24px;font-size:0.75em;color:#333;white-space:nowrap;">Required: {threshold:.0%}</div>
+    <div style="background:#333;width:3px;height:28px;position:absolute;left:{needed_pct:.1f}%;top:0;border-radius:2px;"></div>
+    <div style="position:absolute;left:calc({needed_pct:.1f}% + 6px);top:32px;font-size:0.75em;color:#333;white-space:nowrap;">Required: {threshold:.0%}</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
     # ---- Key metrics ----
-    nu = results.get("num_units") or 1
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Development Cost",      f"${results.get('total_dev_cost', 0):,.0f}")
-    c2.metric("Net Operating Income",        f"${results.get('noi', 0):,.0f}")
-    if results.get("irr") is not None:
-        c3.metric("Levered Internal Rate of Return (5-Year)", f"{results.get('irr', 0):.1%}")
-    elif results.get("for_sale_margin") is not None:
-        c3.metric("Developer Profit Margin", f"{results.get('for_sale_margin', 0):.1%}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Development Cost", f"${results.get('total_dev_cost', 0):,.0f}")
+    c2.metric("Net Operating Income (Annual)", f"${results.get('noi', 0):,.0f}")
+    _total_dev = results.get("total_dev_cost") or 1
+    if results.get("for_sale_margin") is not None:
+        _dev_margin = results["for_sale_margin"]
     else:
-        c3.metric("Stabilized Exit Valuation", f"${results.get('exit_value', 0):,.0f}")
-    c4.metric("Development Cost per Unit",   f"${results.get('cost_per_unit', 0):,.0f}")
+        _exit = results.get("exit_value", 0)
+        _dev_margin = (_exit - _total_dev) / _total_dev
+    c3.metric("Developer Profit Margin", f"{_dev_margin:.1%}")
 
     st.divider()
     excel_bytes = export_to_excel(results, user_inputs, assumptions, zoning_result)
