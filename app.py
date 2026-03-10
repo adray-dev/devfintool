@@ -166,12 +166,6 @@ with st.sidebar:
 
     # Unit mix from building type defaults; parcel size and unit count come from research
     unit_mix = DEFAULT_UNIT_MIX[building_type]
-    st.caption(
-        f"Unit mix: {unit_mix['studio']}% studio / {unit_mix['1br']}% 1BR / "
-        f"{unit_mix['2br']}% 2BR / {unit_mix['3br']}% 3BR"
-        + (f" / {unit_mix['4br']}% 4BR" if unit_mix.get('4br') else "")
-        + " · Parcel size and unit count researched from address."
-    )
 
     affordability_mix = {"Market": 100}
     if use_type == "Affordable / LIHTC":

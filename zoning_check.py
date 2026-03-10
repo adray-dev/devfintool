@@ -118,7 +118,7 @@ Also search: "state housing law preemption {location} {building_type} 2024 2025"
 Also search: "{location} development impact fees {building_type} 2025"
 """
 
-    tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
+    tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 2}]
     messages = [{"role": "user", "content": prompt}]
 
     max_retries = 4
@@ -126,7 +126,7 @@ Also search: "{location} development impact fees {building_type} 2025"
         try:
             response = _get_client().messages.create(
                 model=MODEL,
-                max_tokens=3000,
+                max_tokens=2000,
                 system=SYSTEM_ZONING,
                 tools=tools,
                 messages=messages,

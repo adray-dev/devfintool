@@ -38,7 +38,7 @@ def _run_research(prompt: str, system_extra: str = "") -> dict:
     Retries up to 4 times with exponential backoff on rate limit errors.
     """
     system = SYSTEM_BASE + ("\n\n" + system_extra if system_extra else "")
-    tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
+    tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}]
 
     messages = [{"role": "user", "content": prompt}]
     client = _get_client()
@@ -48,7 +48,7 @@ def _run_research(prompt: str, system_extra: str = "") -> dict:
         try:
             response = client.messages.create(
                 model=MODEL,
-                max_tokens=3000,
+                max_tokens=1500,
                 system=system,
                 tools=tools,
                 messages=messages,
