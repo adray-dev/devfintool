@@ -11,6 +11,7 @@ from datetime import date
 from location_data import STATES
 
 from research import (
+    validate_address,
     research_market_batch,
     research_general_batch,
     research_ami_and_affordable_rents,
@@ -227,6 +228,16 @@ if run_button:
     _invalidate_cache()
     assumptions = {}
     zoning_result = {"adjustments": [], "applicable_adjustments": [], "any_changes": False, "roc_delta": 0}
+
+    # --- Step 0: Validate the address before running any research ---
+    with st.spinner("Verifying address..."):
+        addr_check = validate_address(loc_site, location)
+    if not addr_check["valid"]:
+        st.error(
+            f"**Address not found:** {addr_check.get('found', 'Could not verify this address in any real source.')}  \n"
+            "Please enter a valid street address, parcel ID, or coordinates and try again."
+        )
+        st.stop()
 
     # --- Batch 1 (parallel): market data (web search) + general benchmarks (no search) ---
     # Two API calls run simultaneously. Market batch uses 1 web search for live rents.

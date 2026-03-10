@@ -33,6 +33,72 @@ Rules:
 TODAY = date.today().isoformat()
 
 
+SYSTEM_VALIDATE = """You are an address verification specialist. Your ONLY job is to confirm whether a specific street address or parcel actually exists.
+
+Rules:
+- Search for the exact address using mapping services, county assessor sites, or government records.
+- Return valid=true ONLY if you find the specific building number + street in a real, verifiable source.
+- A city name or neighborhood alone is NOT sufficient — the specific address must be found.
+- If the address appears fabricated, nonsensical, or cannot be found in any real source, return valid=false.
+- Return ONLY valid JSON. No preamble.
+"""
+
+
+def validate_address(site_identifier: str, location: str) -> dict:
+    """
+    Verifies the address exists using 1 web search.
+    Returns {"valid": True, "found": "description of what was found"}
+         or {"valid": False, "reason": "why it wasn't found"}.
+    """
+    prompt = f"""
+Search to verify this address exists: {site_identifier}, {location}
+
+Search for it on Google Maps, a county assessor site, or any government/mapping source.
+
+Return JSON:
+{{
+  "valid": <true if the specific address was found in a real source, false otherwise>,
+  "found": "<what you found, e.g. 'Confirmed: 123 Main St exists per Cook County Assessor' or 'Address not found in any source'>",
+  "source_url": "<URL where it was confirmed, or null>"
+}}
+
+Only return valid=true if the specific street number and street name appear in a real record.
+"""
+    client = _get_client()
+    tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}]
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=200,
+            system=SYSTEM_VALIDATE,
+            tools=tools,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception:
+        # On any error, fail open so a network hiccup doesn't block the user
+        return {"valid": True, "found": "Validation skipped due to API error", "source_url": None}
+
+    text_parts = [b.text for b in response.content if hasattr(b, "text")]
+    full_text = "\n".join(text_parts).strip()
+
+    json_match = re.search(r"```(?:json)?\s*([\s\S]+?)```", full_text)
+    if json_match:
+        json_str = json_match.group(1).strip()
+    else:
+        json_match = re.search(r"(\{[\s\S]+\})", full_text)
+        json_str = json_match.group(1) if json_match else full_text
+
+    try:
+        result = json.loads(json_str)
+        return {
+            "valid": bool(result.get("valid", False)),
+            "found": result.get("found", ""),
+            "source_url": result.get("source_url"),
+        }
+    except (json.JSONDecodeError, AttributeError):
+        return {"valid": False, "found": "Could not parse validation response", "source_url": None}
+
+
 def _run_research(prompt: str, system_extra: str = "", web_search: bool = True) -> dict:
     """Execute a Claude call and parse JSON response.
     web_search=False uses Claude's built-in knowledge only (much faster, ~3-5s vs ~20-25s).
