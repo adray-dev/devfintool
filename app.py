@@ -123,18 +123,6 @@ with st.sidebar:
         help="Enter a street address, parcel ID/APN, or lat/lon coordinates. "
              "Avoid neighborhood or city names alone — the more specific, the better the research.",
     )
-    lot_size_input = st.text_input(
-        "Lot Size (acres)",
-        placeholder="e.g. 0.5  — leave blank to look up from records",
-        key="lot_size_input",
-    )
-    try:
-        lot_size_acres = float(lot_size_input) if lot_size_input.strip() else None
-    except ValueError:
-        lot_size_acres = None
-        if lot_size_input.strip():
-            st.warning("Lot size must be a number (e.g. 0.5).")
-
     site_ok = _is_specific_enough(loc_site)
     if loc_site and not site_ok:
         st.warning("Please enter a street address, parcel ID, or coordinates — neighborhood names alone are too broad.")
@@ -259,14 +247,13 @@ if run_button:
     for key in ("construction", "opex", "interest_rates"):
         assumptions[key] = general_data.get(key, {})
 
-    # --- Parcel lookup (only if lot size not provided) ---
-    if lot_size_acres is None:
-        with st.spinner("Looking up parcel data..."):
-            try:
-                assumptions["parcel"] = research_parcel(location, loc_site)
-            except Exception as e:
-                assumptions["parcel"] = {}
-                st.warning(f"Parcel lookup failed: {e}")
+    # --- Parcel lookup ---
+    with st.spinner("Looking up parcel data..."):
+        try:
+            assumptions["parcel"] = research_parcel(location, loc_site)
+        except Exception as e:
+            assumptions["parcel"] = {}
+            st.warning(f"Parcel lookup failed: {e}")
 
     # --- Optional: LIHTC / For-Sale / AMI (sequential, only when selected) ---
     if use_type == "Affordable / LIHTC":
@@ -291,13 +278,10 @@ if run_button:
             except Exception as e:
                 assumptions["for_sale_comps"] = {}
 
-    # Determine parcel size: user input takes priority over research lookup
-    if lot_size_acres is not None:
-        parcel_acres = lot_size_acres
-    else:
-        _p_item = assumptions.get("parcel", {}).get("parcel_area_acres", {})
-        _p_val  = _p_item.get("value") if isinstance(_p_item, dict) else _p_item
-        parcel_acres = float(_p_val) if _p_val else 1.0
+    # Determine parcel size from research lookup
+    _p_item = assumptions.get("parcel", {}).get("parcel_area_acres", {})
+    _p_val  = _p_item.get("value") if isinstance(_p_item, dict) else _p_item
+    parcel_acres = float(_p_val) if _p_val else 1.0
     num_units = max(1, round(UNITS_PER_ACRE[building_type] * parcel_acres))
     user_inputs["parcel_acres"] = parcel_acres
     user_inputs["num_units"]    = num_units
