@@ -162,32 +162,24 @@ def research_market_rents(location: str, building_type: str, unit_mix: dict) -> 
     unit_list = ", ".join(unit_types) if unit_types else "Studio, 1BR, 2BR, 3BR"
 
     prompt = f"""
-Search for current market-rate asking rents for {building_type} apartments near {location}.
-Unit types needed: {unit_list}
-
-Search Apartments.com, Zillow (rental listings and Zillow Rent Index), Redfin (rental comps), and CoStar.
-Cross-reference at least two sources and note any material discrepancy.
+Based on your knowledge of US rental markets, provide typical market-rate rents for {building_type} apartments in {location} as of 2024-2025.
 
 Return a JSON object:
 {{
-  "studio": {{"value": <monthly rent $ or null>, "unit": "$/month", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "avg NSF, $/NSF, sources cross-referenced"}},
-  "1br": {{"value": <monthly rent $ or null>, "unit": "$/month", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "avg NSF, $/NSF"}},
-  "2br": {{"value": <monthly rent $ or null>, "unit": "$/month", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "avg NSF, $/NSF"}},
-  "3br": {{"value": <monthly rent $ or null>, "unit": "$/month", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "avg NSF, $/NSF"}},
-  "4br": {{"value": <monthly rent $ or null>, "unit": "$/month", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "avg NSF, $/NSF"}},
-  "studio_avg_sf": {{"value": <SF or null>, "unit": "SF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "1br_avg_sf": {{"value": <SF or null>, "unit": "SF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "2br_avg_sf": {{"value": <SF or null>, "unit": "SF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "3br_avg_sf": {{"value": <SF or null>, "unit": "SF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "4br_avg_sf": {{"value": <SF or null>, "unit": "SF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "vacancy_rate": {{"value": <decimal e.g. 0.05 or null>, "unit": "decimal", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "submarket vacancy rate"}}
+  "studio": {{"value": <monthly rent $>, "unit": "$/month", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": "typical for this submarket"}},
+  "1br": {{"value": <monthly rent $>, "unit": "$/month", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "2br": {{"value": <monthly rent $>, "unit": "$/month", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "3br": {{"value": <monthly rent $>, "unit": "$/month", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "4br": {{"value": <monthly rent $>, "unit": "$/month", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "studio_avg_sf": {{"value": <SF>, "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "1br_avg_sf": {{"value": <SF>, "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "2br_avg_sf": {{"value": <SF>, "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "3br_avg_sf": {{"value": <SF>, "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "4br_avg_sf": {{"value": <SF>, "unit": "SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "vacancy_rate": {{"value": <decimal e.g. 0.05>, "unit": "decimal", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": "submarket vacancy rate"}}
 }}
-
-Search: "{location} apartments for rent {building_type} 2025 average rent"
-Also search: "Zillow Rent Index {location} 2025"
-Also search: "{location} apartment vacancy rate 2025"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_cap_rates(location: str, use_type: str) -> dict:
@@ -196,22 +188,16 @@ def research_cap_rates(location: str, use_type: str) -> dict:
     Returns cap rate and source for asset type in submarket.
     """
     prompt = f"""
-Search for current (2025-2026) market cap rates for {use_type} properties in {location} or its metro area.
-
-Search CoStar, CBRE research reports, JLL research, Marcus & Millichap market reports.
+Based on your knowledge of US real estate markets, provide typical cap rates for {use_type} properties in {location} as of 2024-2025.
 
 Return a JSON object:
 {{
-  "cap_rate": {{"value": <decimal e.g. 0.055 or null>, "unit": "decimal", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "range if available, trend direction"}},
-  "cap_rate_range_low": {{"value": <decimal or null>, "unit": "decimal", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "cap_rate_range_high": {{"value": <decimal or null>, "unit": "decimal", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}}
+  "cap_rate": {{"value": <decimal e.g. 0.055>, "unit": "decimal", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": "typical for this market and asset class"}},
+  "cap_rate_range_low": {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "cap_rate_range_high": {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}}
 }}
-
-Search: "{location} {use_type} cap rate 2025 market"
-Also search: "CBRE JLL multifamily cap rate {location} metro 2025"
-Also search: "Marcus Millichap {location} apartment cap rate 2025"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_interest_rates() -> dict:
@@ -220,25 +206,19 @@ def research_interest_rates() -> dict:
     Returns current rate + typical construction loan spread (250bps) and permanent loan spread.
     """
     prompt = f"""
-Search the Federal Reserve website (federalreserve.gov) and SOFR data sources for the current federal funds rate and SOFR rate as of today {TODAY}.
-
-Also search for typical construction loan spreads and permanent/perm loan spreads over SOFR for multifamily development in 2025-2026.
+Based on your knowledge of US interest rates and lending markets as of 2024-2025, provide current rate estimates for multifamily construction and permanent loans.
 
 Return a JSON object:
 {{
-  "sofr_rate": {{"value": <decimal e.g. 0.053 or null>, "unit": "decimal", "source_url": "https://www.federalreserve.gov/...", "source_name": "Federal Reserve", "date_retrieved": "{TODAY}", "notes": "current SOFR or effective federal funds rate"}},
-  "federal_funds_rate": {{"value": <decimal or null>, "unit": "decimal", "source_url": "https://www.federalreserve.gov/...", "source_name": "Federal Reserve", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "construction_loan_spread_bps": {{"value": 250, "unit": "basis points", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "typical spread over SOFR for construction loans"}},
-  "construction_loan_rate": {{"value": <sofr + 0.025 or null>, "unit": "decimal", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "SOFR + 250bps"}},
-  "perm_loan_spread_bps": {{"value": <number or null>, "unit": "basis points", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "typical spread for permanent multifamily loan"}},
-  "perm_loan_rate": {{"value": <decimal or null>, "unit": "decimal", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "SOFR + permanent spread"}}
+  "sofr_rate": {{"value": <decimal e.g. 0.053>, "unit": "decimal", "source_url": null, "source_name": "Federal Reserve estimate", "date_retrieved": "{TODAY}", "notes": "approximate SOFR as of training data"}},
+  "federal_funds_rate": {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "Federal Reserve estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "construction_loan_spread_bps": {{"value": 250, "unit": "basis points", "source_url": null, "source_name": "industry benchmark", "date_retrieved": "{TODAY}", "notes": "typical spread over SOFR"}},
+  "construction_loan_rate": {{"value": <sofr + 0.025>, "unit": "decimal", "source_url": null, "source_name": "industry benchmark", "date_retrieved": "{TODAY}", "notes": "SOFR + 250bps"}},
+  "perm_loan_spread_bps": {{"value": <number>, "unit": "basis points", "source_url": null, "source_name": "industry benchmark", "date_retrieved": "{TODAY}", "notes": "typical spread for permanent multifamily loan"}},
+  "perm_loan_rate": {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "industry benchmark", "date_retrieved": "{TODAY}", "notes": "SOFR + permanent spread"}}
 }}
-
-Search: "current SOFR rate 2025 federal reserve"
-Also search: "federalreserve.gov current federal funds rate"
-Also search: "multifamily construction loan interest rate spread SOFR 2025"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_tax_rates(location: str) -> dict:
@@ -293,10 +273,8 @@ Return a JSON object with a key for each AMI level:
 
 Only include AMI levels from: {ami_str}
 
-Search: "HUD income limits {location} 2025 huduser.gov"
-Also search: "huduser.gov income limits {location} area median income 2025"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_opex_benchmarks(use_type: str, building_type: str) -> dict:
@@ -352,23 +330,18 @@ def research_for_sale_comps(location: str, building_type: str) -> dict:
     Returns median sale price/SF, days on market, absorption rate.
     """
     prompt = f"""
-Search for recent condo and townhome sales near {location} (past 12 months, within ~1 mile) suitable for {building_type} development.
-
-Search Redfin and Zillow for recent sold listings. Cross-reference with CoStar where available.
+Based on your knowledge of US for-sale residential markets, provide typical condo/townhome sale price benchmarks for {building_type} in {location} as of 2024-2025.
 
 Return a JSON object:
 {{
-  "median_sale_price_per_sf": {{"value": <number or null>, "unit": "$/SF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "number of comps, date range"}},
-  "median_sale_price": {{"value": <number or null>, "unit": "$", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "median total sale price"}},
-  "median_days_on_market": {{"value": <number or null>, "unit": "days", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "absorption_rate_units_per_month": {{"value": <number or null>, "unit": "units/month", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "how many units sold per month in submarket"}},
-  "profit_margin_benchmark": {{"value": <decimal e.g. 0.18 or null>, "unit": "decimal", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "typical developer profit margin for for-sale product in this market"}}
+  "median_sale_price_per_sf": {{"value": <number>, "unit": "$/SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": "typical for this submarket"}},
+  "median_sale_price": {{"value": <number>, "unit": "$", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "median_days_on_market": {{"value": <number>, "unit": "days", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "absorption_rate_units_per_month": {{"value": <number>, "unit": "units/month", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "profit_margin_benchmark": {{"value": <decimal e.g. 0.18>, "unit": "decimal", "source_url": null, "source_name": "industry benchmark", "date_retrieved": "{TODAY}", "notes": "typical developer margin"}}
 }}
-
-Search: "{location} condo townhome sold price per SF 2024 2025 Redfin Zillow"
-Also search: "{location} new construction condo sale price $/SF 2025"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 SYSTEM_PARCEL = """You are a property records lookup specialist. Your ONLY job is to retrieve data directly from official county assessor or city auditor websites.
@@ -468,9 +441,7 @@ def research_lihtc_rules(state: str, lihtc_type: str) -> dict:
     lihtc_type: "4%" or "9%"
     """
     prompt = f"""
-Search the {state} state housing finance agency (HFA) website for the current Qualified Allocation Plan (QAP) and LIHTC program rules for {lihtc_type} tax credits.
-
-Find: credit rate, qualified basis percentage, investor equity pricing ($/credit), per-capita credit cap, maximum project credit cap, application deadlines/cycles.
+Based on your knowledge of LIHTC programs, provide typical parameters for {lihtc_type} tax credits in {state} as of 2024-2025.
 
 Return a JSON object:
 {{
@@ -483,8 +454,5 @@ Return a JSON object:
   "application_cycle": {{"value": "...", "unit": "text", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "when applications are accepted"}}
 }}
 
-Search: "{state} LIHTC QAP {lihtc_type} tax credit housing finance agency 2025"
-Also search: "{state} housing finance agency qualified allocation plan 2025"
-Also search: "{state} low income housing tax credit investor pricing 2025"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
