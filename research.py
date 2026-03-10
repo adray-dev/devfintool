@@ -12,14 +12,13 @@ from typing import Optional
 import anthropic
 import streamlit as st
 
+MODEL = "claude-sonnet-4-20250514"
+
 def _get_client():
     try:
         return anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
     except Exception:
         return anthropic.Anthropic()  # falls back to ANTHROPIC_API_KEY env var
-
-client = _get_client()
-MODEL = "claude-sonnet-4-20250514"
 
 
 SYSTEM_BASE = """You are a real estate research assistant. Your job is to find accurate, current financial data for real estate development feasibility analysis.
@@ -44,6 +43,7 @@ def _run_research(prompt: str, system_extra: str = "") -> dict:
     tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
 
     messages = [{"role": "user", "content": prompt}]
+    client = _get_client()
 
     max_retries = 4
     for attempt in range(max_retries):

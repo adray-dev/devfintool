@@ -14,14 +14,13 @@ import anthropic
 import streamlit as st
 from calculations import run_calculations
 
+MODEL = "claude-sonnet-4-20250514"
+
 def _get_client():
     try:
         return anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
     except Exception:
         return anthropic.Anthropic()
-
-client = _get_client()
-MODEL = "claude-sonnet-4-20250514"
 TODAY = date.today().isoformat()
 
 SYSTEM_ZONING = """You are a real estate entitlement and zoning research specialist. Your job is to find
@@ -127,7 +126,7 @@ Also search: "{location} development impact fees {building_type} 2025"
     max_retries = 4
     for attempt in range(max_retries):
         try:
-            response = client.messages.create(
+            response = _get_client().messages.create(
                 model=MODEL,
                 max_tokens=3000,
                 system=SYSTEM_ZONING,
