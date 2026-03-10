@@ -456,3 +456,110 @@ Return a JSON object:
 
 """
     return _run_research(prompt, web_search=False)
+
+
+# ---------------------------------------------------------------------------
+# Batched research functions — 2 calls instead of 10
+# ---------------------------------------------------------------------------
+
+def research_market_batch(location: str, building_type: str, use_type: str, unit_mix: dict) -> dict:
+    """
+    Single call: rents, cap_rates, zoning, land, tax_rates.
+    Uses 1 web search for live rent/cap rate data.
+    Returns dict with keys: rents, cap_rates, zoning, land, tax_rates.
+    """
+    unit_list = ", ".join(ut for ut, pct in unit_mix.items() if pct > 0) or "Studio, 1BR, 2BR, 3BR"
+    prompt = f"""
+Provide real estate market data for a {building_type} {use_type} development in {location} as of {TODAY}.
+Search for current asking rents in {location} to populate the rents section accurately.
+
+Return a JSON object with exactly these five keys:
+{{
+  "rents": {{
+    "studio":        {{"value": <$/month or null>, "unit": "$/month",  "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "1br":           {{"value": <$/month or null>, "unit": "$/month",  "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "2br":           {{"value": <$/month or null>, "unit": "$/month",  "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "3br":           {{"value": <$/month or null>, "unit": "$/month",  "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "4br":           {{"value": <$/month or null>, "unit": "$/month",  "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "studio_avg_sf": {{"value": <SF>,              "unit": "SF",       "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "1br_avg_sf":    {{"value": <SF>,              "unit": "SF",       "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "2br_avg_sf":    {{"value": <SF>,              "unit": "SF",       "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "3br_avg_sf":    {{"value": <SF>,              "unit": "SF",       "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "4br_avg_sf":    {{"value": <SF>,              "unit": "SF",       "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "vacancy_rate":  {{"value": <decimal 0.05>,    "unit": "decimal",  "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}}
+  }},
+  "cap_rates": {{
+    "cap_rate":            {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "cap_rate_range_low":  {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}},
+    "cap_rate_range_high": {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "market data", "date_retrieved": "{TODAY}", "notes": ""}}
+  }},
+  "zoning": {{
+    "max_far":           {{"value": <number>, "unit": "ratio",       "source_url": null, "source_name": "typical code", "date_retrieved": "{TODAY}", "notes": ""}},
+    "max_height_stories":{{"value": <number>, "unit": "stories",     "source_url": null, "source_name": "typical code", "date_retrieved": "{TODAY}", "notes": ""}},
+    "parking_studio":    {{"value": <number>, "unit": "spaces/unit", "source_url": null, "source_name": "typical code", "date_retrieved": "{TODAY}", "notes": ""}},
+    "parking_1br":       {{"value": <number>, "unit": "spaces/unit", "source_url": null, "source_name": "typical code", "date_retrieved": "{TODAY}", "notes": ""}},
+    "parking_2br":       {{"value": <number>, "unit": "spaces/unit", "source_url": null, "source_name": "typical code", "date_retrieved": "{TODAY}", "notes": ""}},
+    "parking_3br":       {{"value": <number>, "unit": "spaces/unit", "source_url": null, "source_name": "typical code", "date_retrieved": "{TODAY}", "notes": ""}},
+    "setback_front_ft":  {{"value": <number>, "unit": "feet",        "source_url": null, "source_name": "typical code", "date_retrieved": "{TODAY}", "notes": ""}},
+    "setback_side_ft":   {{"value": <number>, "unit": "feet",        "source_url": null, "source_name": "typical code", "date_retrieved": "{TODAY}", "notes": ""}},
+    "setback_rear_ft":   {{"value": <number>, "unit": "feet",        "source_url": null, "source_name": "typical code", "date_retrieved": "{TODAY}", "notes": ""}}
+  }},
+  "land": {{
+    "land_cost_per_sf":   {{"value": <number>, "unit": "$/land SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+    "land_cost_per_acre": {{"value": <number>, "unit": "$/acre",    "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}}
+  }},
+  "tax_rates": {{
+    "effective_tax_rate": {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "state/county estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+    "mill_rate":          {{"value": <mills or null>, "unit": "mills", "source_url": null, "source_name": "state/county estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+    "assessment_ratio":   {{"value": <decimal or null>, "unit": "decimal", "source_url": null, "source_name": "state/county estimate", "date_retrieved": "{TODAY}", "notes": ""}}
+  }}
+}}
+Unit types needed for rents: {unit_list}
+"""
+    return _run_research(prompt, web_search=True)
+
+
+def research_general_batch(location: str, building_type: str, use_type: str) -> dict:
+    """
+    Single call: construction, opex, interest_rates, employment.
+    No web search — uses Claude's training knowledge.
+    Returns dict with keys: construction, opex, interest_rates, employment.
+    """
+    prompt = f"""
+Based on your knowledge, provide financial benchmarks for a {building_type} {use_type} development in {location} as of 2024-2025.
+
+Return a JSON object with exactly these four keys:
+{{
+  "construction": {{
+    "hard_cost_per_gsf":            {{"value": <$/GSF>,  "unit": "$/GSF",   "source_url": null, "source_name": "RSMeans/industry", "date_retrieved": "{TODAY}", "notes": "regional estimate"}},
+    "parking_structured_per_space": {{"value": <$/space>,"unit": "$/space", "source_url": null, "source_name": "industry",         "date_retrieved": "{TODAY}", "notes": "structured/podium"}},
+    "parking_surface_per_space":    {{"value": <$/space>,"unit": "$/space", "source_url": null, "source_name": "industry",         "date_retrieved": "{TODAY}", "notes": "surface parking"}}
+  }},
+  "opex": {{
+    "total_opex_per_unit_year":    {{"value": <number>, "unit": "$/unit/year",       "source_url": null, "source_name": "NMHC/IREM", "date_retrieved": "{TODAY}", "notes": ""}},
+    "management_fee_pct_egi":      {{"value": <decimal>,"unit": "decimal (% EGI)",   "source_url": null, "source_name": "NMHC/IREM", "date_retrieved": "{TODAY}", "notes": ""}},
+    "maintenance_per_unit_year":   {{"value": <number>, "unit": "$/unit/year",       "source_url": null, "source_name": "NMHC/IREM", "date_retrieved": "{TODAY}", "notes": ""}},
+    "insurance_per_unit_year":     {{"value": <number>, "unit": "$/unit/year",       "source_url": null, "source_name": "NMHC/IREM", "date_retrieved": "{TODAY}", "notes": ""}},
+    "admin_per_unit_year":         {{"value": <number>, "unit": "$/unit/year",       "source_url": null, "source_name": "NMHC/IREM", "date_retrieved": "{TODAY}", "notes": ""}},
+    "capex_reserve_per_unit_year": {{"value": <number>, "unit": "$/unit/year",       "source_url": null, "source_name": "NMHC/IREM", "date_retrieved": "{TODAY}", "notes": ""}}
+  }},
+  "interest_rates": {{
+    "sofr_rate":                   {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "Fed estimate", "date_retrieved": "{TODAY}", "notes": "approximate SOFR"}},
+    "federal_funds_rate":          {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "Fed estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+    "construction_loan_spread_bps":{{"value": 250,       "unit": "bps",    "source_url": null, "source_name": "industry",     "date_retrieved": "{TODAY}", "notes": "typical spread"}},
+    "construction_loan_rate":      {{"value": <sofr+0.025>,"unit": "decimal","source_url": null,"source_name": "industry",    "date_retrieved": "{TODAY}", "notes": "SOFR+250bps"}},
+    "perm_loan_spread_bps":        {{"value": <number>,  "unit": "bps",    "source_url": null, "source_name": "industry",     "date_retrieved": "{TODAY}", "notes": ""}},
+    "perm_loan_rate":              {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "industry",     "date_retrieved": "{TODAY}", "notes": ""}}
+  }},
+  "employment": {{
+    "top_sectors": [{{"sector": "...", "employment_count": null, "source_url": null, "source_name": "BLS estimate", "date_retrieved": "{TODAY}", "notes": ""}}],
+    "job_growth_rate_annual":  {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "BLS estimate",    "date_retrieved": "{TODAY}", "notes": ""}},
+    "unemployment_rate":       {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "BLS estimate",    "date_retrieved": "{TODAY}", "notes": ""}},
+    "median_household_income": {{"value": <$>,       "unit": "$/year",  "source_url": null, "source_name": "Census estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+    "median_wage":             {{"value": <$>,       "unit": "$/year",  "source_url": null, "source_name": "BLS estimate",    "date_retrieved": "{TODAY}", "notes": ""}},
+    "notable_employers": [{{"name": "...", "note": "major employer", "source_url": null, "date_retrieved": "{TODAY}"}}],
+    "demand_narrative":        {{"value": "...",     "unit": "text",    "source_url": null, "source_name": "market knowledge","date_retrieved": "{TODAY}", "notes": ""}}
+  }}
+}}
+"""
+    return _run_research(prompt, web_search=False)

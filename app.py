@@ -6,23 +6,14 @@ Real Estate Development Feasibility Calculator
 import streamlit as st
 import pandas as pd
 import numpy as np
-import time
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from location_data import STATES
 
 from research import (
-    research_zoning,
-    research_land_costs,
-    research_construction_costs,
-    research_market_rents,
-    research_cap_rates,
-    research_interest_rates,
-    research_tax_rates,
+    research_market_batch,
+    research_general_batch,
     research_ami_and_affordable_rents,
-    research_opex_benchmarks,
-    research_employment_and_demand,
     research_for_sale_comps,
     research_lihtc_rules,
     research_parcel,
@@ -237,79 +228,57 @@ if run_button:
     assumptions = {}
     zoning_result = {"adjustments": [], "applicable_adjustments": [], "any_changes": False, "roc_delta": 0}
 
-    progress = st.progress(0, text="Starting research...")
+    # --- Batch 1 (parallel): market data (web search) + general benchmarks (no search) ---
+    # Two API calls run simultaneously. Market batch uses 1 web search for live rents.
+    with st.spinner("Researching market data..."):
+        def _market():
+            return research_market_batch(location, building_type, use_type, unit_mix)
+        def _general():
+            return research_general_batch(location, building_type, use_type)
 
-    research_steps = []
-    result_keys = []
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            f_market  = executor.submit(_market)
+            f_general = executor.submit(_general)
+            market_data  = f_market.result()
+            general_data = f_general.result()
 
+    # Unpack batch results into assumptions
+    for key in ("rents", "cap_rates", "zoning", "land", "tax_rates"):
+        assumptions[key] = market_data.get(key, {})
+    for key in ("construction", "opex", "interest_rates", "employment"):
+        assumptions[key] = general_data.get(key, {})
+
+    # --- Parcel lookup (only if lot size not provided) ---
     if lot_size_acres is None:
-        research_steps.append(("Looking up parcel data...", lambda: research_parcel(location, loc_site)))
-        result_keys.append("parcel")
+        with st.spinner("Looking up parcel data..."):
+            try:
+                assumptions["parcel"] = research_parcel(location, loc_site)
+            except Exception as e:
+                assumptions["parcel"] = {}
+                st.warning(f"Parcel lookup failed: {e}")
 
-    research_steps += [
-        ("Researching zoning regulations...",        lambda: research_zoning(location, building_type)),
-        ("Researching land costs...",                lambda: research_land_costs(location, building_type)),
-        ("Researching construction costs...",        lambda: research_construction_costs(location, building_type)),
-        ("Researching market rents...",              lambda: research_market_rents(location, building_type, unit_mix)),
-        ("Researching cap rates...",                 lambda: research_cap_rates(location, use_type)),
-        ("Fetching current interest rates...",       lambda: research_interest_rates()),
-        ("Researching property tax rates...",        lambda: research_tax_rates(location)),
-        ("Researching operating expense benchmarks...", lambda: research_opex_benchmarks(use_type, building_type)),
-        ("Researching employment & demand signals...", lambda: research_employment_and_demand(location)),
-    ]
-    result_keys += ["zoning", "land", "construction", "rents", "cap_rates",
-                    "interest_rates", "tax_rates", "opex", "employment"]
-
+    # --- Optional: LIHTC / For-Sale / AMI (sequential, only when selected) ---
     if use_type == "Affordable / LIHTC":
         ami_levels = [int(k.replace("% AMI", "")) for k in affordability_mix if k != "Market"]
-        research_steps.append(
-            (f"Fetching HUD AMI limits for {location}...",
-             lambda: research_ami_and_affordable_rents(location, ami_levels))
-        )
-        result_keys.append("ami")
-
+        with st.spinner("Fetching HUD AMI limits..."):
+            try:
+                assumptions["ami"] = research_ami_and_affordable_rents(location, ami_levels)
+            except Exception as e:
+                assumptions["ami"] = {}
         if lihtc_type:
             state = location.split(",")[-1].strip() if "," in location else location
-            research_steps.append(
-                (f"Researching LIHTC rules for {state}...",
-                 lambda: research_lihtc_rules(state, lihtc_type))
-            )
-            result_keys.append("lihtc")
+            with st.spinner(f"Researching LIHTC rules for {state}..."):
+                try:
+                    assumptions["lihtc"] = research_lihtc_rules(state, lihtc_type)
+                except Exception as e:
+                    assumptions["lihtc"] = {}
 
     if use_type in ("For-Sale Condo", "Mixed-Use"):
-        research_steps.append(
-            ("Researching for-sale comps...",
-             lambda: research_for_sale_comps(location, building_type))
-        )
-        result_keys.append("for_sale_comps")
-
-    # Run research calls with 5 parallel workers.
-    # 3 of the 10 steps use no web search and complete in ~3-5s.
-    # The 7 web-search steps run concurrently; each does 1 search (low TPM).
-    total_steps = len(research_steps)
-    completed_count = [0]
-    lock = threading.Lock()
-
-    def _run_step(idx, label, fn, key):
-        try:
-            result = fn()
-        except Exception as e:
-            result = {}
-            st.warning(f"Research step failed ({label}): {e}")
-        with lock:
-            completed_count[0] += 1
-            pct = int(completed_count[0] / total_steps * 80)
-            progress.progress(pct, text=f"Completed: {label}")
-        return key, result
-
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {
-            executor.submit(_run_step, i, label, fn, result_keys[i]): i
-            for i, (label, fn) in enumerate(research_steps)
-        }
-        for future in as_completed(futures):
-            key, result = future.result()
-            assumptions[key] = result
+        with st.spinner("Researching for-sale comps..."):
+            try:
+                assumptions["for_sale_comps"] = research_for_sale_comps(location, building_type)
+            except Exception as e:
+                assumptions["for_sale_comps"] = {}
 
     # Determine parcel size: user input takes priority over research lookup
     if lot_size_acres is not None:
@@ -322,15 +291,12 @@ if run_button:
     user_inputs["parcel_acres"] = parcel_acres
     user_inputs["num_units"]    = num_units
 
-    progress.progress(82, text="Running financial model...")
-    try:
-        results = run_calculations(user_inputs, assumptions)
-    except Exception as e:
-        st.error(f"Calculation error: {e}")
-        st.stop()
-
-    progress.progress(100, text="Complete!")
-    progress.empty()
+    with st.spinner("Running financial model..."):
+        try:
+            results = run_calculations(user_inputs, assumptions)
+        except Exception as e:
+            st.error(f"Calculation error: {e}")
+            st.stop()
 
     st.session_state["research_cache"]    = assumptions
     st.session_state["results_cache"]     = results
