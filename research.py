@@ -9,16 +9,14 @@ import re
 import time
 from datetime import date
 from typing import Optional
+import os
 import anthropic
-import streamlit as st
 
 MODEL = "claude-sonnet-4-20250514"
 
 def _get_client():
-    try:
-        return anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
-    except Exception:
-        return anthropic.Anthropic()  # falls back to ANTHROPIC_API_KEY env var
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
 
 
 SYSTEM_BASE = """You are a real estate research assistant. Your job is to find accurate, current financial data for real estate development feasibility analysis.

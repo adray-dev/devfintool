@@ -10,17 +10,15 @@ import copy
 import time
 from datetime import date
 from typing import Optional
+import os
 import anthropic
-import streamlit as st
 from calculations import run_calculations
 
 MODEL = "claude-sonnet-4-20250514"
 
 def _get_client():
-    try:
-        return anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
-    except Exception:
-        return anthropic.Anthropic()
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
 TODAY = date.today().isoformat()
 
 SYSTEM_ZONING = """You are a real estate entitlement and zoning research specialist. Your job is to find
