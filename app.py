@@ -232,11 +232,10 @@ user_inputs = {
 cache_key = _cache_key(location, building_type, use_type)
 needs_refresh = _needs_refresh(location, building_type, use_type)
 
-if run_button or (needs_refresh and "research_cache" not in st.session_state):
+if run_button:
     _invalidate_cache()
     assumptions = {}
-    zoning_result = {"adjustments": [], "applicable_adjustments": [],
-                     "any_changes": False, "roc_delta": 0}
+    zoning_result = {"adjustments": [], "applicable_adjustments": [], "any_changes": False, "roc_delta": 0}
 
     progress = st.progress(0, text="Starting research...")
 
@@ -329,18 +328,6 @@ if run_button or (needs_refresh and "research_cache" not in st.session_state):
     except Exception as e:
         st.error(f"Calculation error: {e}")
         st.stop()
-
-    progress.progress(88, text="Running zoning adjustment pass...")
-    try:
-        zoning_result = run_zoning_adjustment_pass(
-            location, building_type, use_type, results, assumptions, user_inputs
-        )
-        # Use adjusted results if any changes were made
-        if zoning_result.get("any_changes"):
-            results = zoning_result["adjusted_results"]
-            assumptions = zoning_result["adjusted_assumptions"]
-    except Exception as e:
-        st.warning(f"Zoning pass failed: {e}")
 
     progress.progress(100, text="Complete!")
     progress.empty()

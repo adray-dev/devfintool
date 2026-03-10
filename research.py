@@ -95,53 +95,43 @@ def _run_research(prompt: str, system_extra: str = "", web_search: bool = True) 
 
 def research_zoning(location: str, building_type: str) -> dict:
     """
-    Search local zoning code for: maximum FAR, maximum height (stories),
-    minimum parking requirements by bedroom type, minimum setbacks.
-    Does NOT apply transit-based reductions (handled in zoning_check.py).
+    Returns typical zoning parameters from Claude's training data.
+    No web search — uses known zoning norms for the city/region.
     """
     prompt = f"""
-Search the municipal code and planning department websites for {location} to find current zoning regulations applicable to a {building_type} development.
+Based on your knowledge of typical US zoning codes, provide base zoning parameters for a {building_type} development in {location}. Use the most common zoning district that would apply to this building type in this city.
 
-Find and return a JSON object with these keys:
+Return a JSON object:
 {{
-  "max_far": {{"value": <number>, "unit": "ratio", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "max_height_stories": {{"value": <number>, "unit": "stories", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "parking_studio": {{"value": <number>, "unit": "spaces/unit", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "parking_1br": {{"value": <number>, "unit": "spaces/unit", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "parking_2br": {{"value": <number>, "unit": "spaces/unit", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "parking_3br": {{"value": <number>, "unit": "spaces/unit", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "setback_front_ft": {{"value": <number>, "unit": "feet", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "setback_side_ft": {{"value": <number>, "unit": "feet", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "setback_rear_ft": {{"value": <number>, "unit": "feet", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}}
+  "max_far": {{"value": <number>, "unit": "ratio", "source_url": null, "source_name": "typical municipal code", "date_retrieved": "{TODAY}", "notes": "typical base zoning for this city/building type"}},
+  "max_height_stories": {{"value": <number>, "unit": "stories", "source_url": null, "source_name": "typical municipal code", "date_retrieved": "{TODAY}", "notes": ""}},
+  "parking_studio": {{"value": <number>, "unit": "spaces/unit", "source_url": null, "source_name": "typical municipal code", "date_retrieved": "{TODAY}", "notes": ""}},
+  "parking_1br": {{"value": <number>, "unit": "spaces/unit", "source_url": null, "source_name": "typical municipal code", "date_retrieved": "{TODAY}", "notes": ""}},
+  "parking_2br": {{"value": <number>, "unit": "spaces/unit", "source_url": null, "source_name": "typical municipal code", "date_retrieved": "{TODAY}", "notes": ""}},
+  "parking_3br": {{"value": <number>, "unit": "spaces/unit", "source_url": null, "source_name": "typical municipal code", "date_retrieved": "{TODAY}", "notes": ""}},
+  "setback_front_ft": {{"value": <number>, "unit": "feet", "source_url": null, "source_name": "typical municipal code", "date_retrieved": "{TODAY}", "notes": ""}},
+  "setback_side_ft": {{"value": <number>, "unit": "feet", "source_url": null, "source_name": "typical municipal code", "date_retrieved": "{TODAY}", "notes": ""}},
+  "setback_rear_ft": {{"value": <number>, "unit": "feet", "source_url": null, "source_name": "typical municipal code", "date_retrieved": "{TODAY}", "notes": ""}}
 }}
-
-Search: "{location} zoning code {building_type} parking requirements FAR height limits setbacks"
-Also search: "{location} municipal code multifamily development standards"
-Do NOT apply any transit-oriented or overlay reductions — return base zoning only.
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_land_costs(location: str, building_type: str) -> dict:
     """
-    Search for recent comparable land sales within ~1 mile of location.
-    Returns $/land SF for the relevant building type.
+    Returns land cost estimates from Claude's training data.
+    No web search — uses known land value ranges for the market.
     """
     prompt = f"""
-Search for recent (2024-2026) comparable land/lot sales near {location} suitable for {building_type} development.
-
-Search CoStar, LoopNet, Redfin (land/lot listings and sold data), and county transaction records.
+Based on your knowledge of US land markets, provide typical land cost estimates for a {building_type} development site in {location} as of 2024-2025.
 
 Return a JSON object:
 {{
-  "land_cost_per_sf": {{"value": <number or null>, "unit": "$/land SF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "comparable sales details, number of comps found"}},
-  "land_cost_per_acre": {{"value": <number or null>, "unit": "$/acre", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}}
+  "land_cost_per_sf": {{"value": <number>, "unit": "$/land SF", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": "typical range for this market and building type"}},
+  "land_cost_per_acre": {{"value": <number>, "unit": "$/acre", "source_url": null, "source_name": "market estimate", "date_retrieved": "{TODAY}", "notes": ""}}
 }}
-
-Search: "{location} land sale {building_type} site comparable 2024 2025"
-Also search: "{location} multifamily development site $/acre $/SF sold"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_construction_costs(location: str, building_type: str) -> dict:
@@ -253,23 +243,20 @@ Also search: "multifamily construction loan interest rate spread SOFR 2025"
 
 def research_tax_rates(location: str) -> dict:
     """
-    Search county assessor or treasurer website for current property tax mill rate / effective rate.
+    Returns property tax estimates from Claude's training data.
+    No web search — uses known effective rates by state/county.
     """
     prompt = f"""
-Search the county assessor, county treasurer, or tax collector website for {location} to find the current property tax mill rate or effective property tax rate for commercial/multifamily real estate.
+Based on your knowledge of US property tax rates, provide the typical effective property tax rate for commercial/multifamily real estate in {location} as of 2024-2025.
 
 Return a JSON object:
 {{
-  "effective_tax_rate": {{"value": <decimal e.g. 0.012 or null>, "unit": "decimal (of assessed value)", "source_url": "...", "source_name": "county assessor/treasurer", "date_retrieved": "{TODAY}", "notes": "mill rate if applicable, assessment ratio"}},
-  "mill_rate": {{"value": <mills or null>, "unit": "mills ($/1000 assessed value)", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "assessment_ratio": {{"value": <decimal or null>, "unit": "decimal (assessed/market value)", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "ratio of assessed to market value"}}
+  "effective_tax_rate": {{"value": <decimal e.g. 0.012>, "unit": "decimal (of assessed value)", "source_url": null, "source_name": "state/county rate estimate", "date_retrieved": "{TODAY}", "notes": "typical effective rate for this jurisdiction"}},
+  "mill_rate": {{"value": <mills or null>, "unit": "mills ($/1000 assessed value)", "source_url": null, "source_name": "state/county rate estimate", "date_retrieved": "{TODAY}", "notes": ""}},
+  "assessment_ratio": {{"value": <decimal or null>, "unit": "decimal (assessed/market value)", "source_url": null, "source_name": "state/county rate estimate", "date_retrieved": "{TODAY}", "notes": ""}}
 }}
-
-Search: "{location} county property tax rate multifamily 2025"
-Also search: "{location} county assessor millage rate commercial property tax"
-Also search: "{location} property tax mill rate 2024 2025"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_ami_and_affordable_rents(location: str, ami_levels: list) -> dict:
