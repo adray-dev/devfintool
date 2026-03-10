@@ -33,12 +33,13 @@ Rules:
 TODAY = date.today().isoformat()
 
 
-def _run_research(prompt: str, system_extra: str = "") -> dict:
-    """Execute a web-search-enabled Claude call and parse JSON response.
+def _run_research(prompt: str, system_extra: str = "", web_search: bool = True) -> dict:
+    """Execute a Claude call and parse JSON response.
+    web_search=False uses Claude's built-in knowledge only (much faster, ~3-5s vs ~20-25s).
     Retries up to 4 times with exponential backoff on rate limit errors.
     """
     system = SYSTEM_BASE + ("\n\n" + system_extra if system_extra else "")
-    tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}]
+    tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}] if web_search else []
 
     messages = [{"role": "user", "content": prompt}]
     client = _get_client()
@@ -46,16 +47,17 @@ def _run_research(prompt: str, system_extra: str = "") -> dict:
     max_retries = 4
     for attempt in range(max_retries):
         try:
-            response = client.messages.create(
+            kwargs = dict(
                 model=MODEL,
-                max_tokens=1500,
+                max_tokens=1200,
                 system=system,
-                tools=tools,
                 messages=messages,
             )
+            if tools:
+                kwargs["tools"] = tools
+            response = client.messages.create(**kwargs)
             break  # success
         except anthropic.RateLimitError as e:
-            # Wait long enough to guarantee the rolling 1-minute TPM window resets.
             wait = 65 + 30 * attempt  # 65, 95, 125, 155 seconds
             if attempt < max_retries - 1:
                 time.sleep(wait)
@@ -75,7 +77,6 @@ def _run_research(prompt: str, system_extra: str = "") -> dict:
     if json_match:
         json_str = json_match.group(1).strip()
     else:
-        # Try to find raw JSON object or array
         json_match = re.search(r"(\{[\s\S]+\}|\[[\s\S]+\])", full_text)
         json_str = json_match.group(1) if json_match else full_text
 
@@ -145,26 +146,20 @@ Also search: "{location} multifamily development site $/acre $/SF sold"
 
 def research_construction_costs(location: str, building_type: str) -> dict:
     """
-    Search for current hard cost benchmarks ($/GSF) for building type in the metro area.
-    Uses RSMeans regional data, local permit filings, broker/developer reports 2025-2026.
+    Returns hard cost benchmarks ($/GSF) from Claude's training data.
+    No web search — construction costs are stable enough for regional estimates.
     """
     prompt = f"""
-Search for current construction hard cost benchmarks ($/gross square foot) for {building_type} in {location} or its metro area.
-
-Use RSMeans regional cost data, ENR Building Cost Index, local permit filings, and developer/broker reports from 2025-2026.
+Based on your knowledge of US construction costs, provide hard cost benchmarks for {building_type} in {location} or its metro area as of 2024-2025. Use RSMeans regional data and typical developer benchmarks you know.
 
 Return a JSON object:
 {{
-  "hard_cost_per_gsf": {{"value": <number or null>, "unit": "$/GSF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "source methodology, year of data"}},
-  "parking_structured_per_space": {{"value": <number or null>, "unit": "$/space", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "structured/podium parking cost"}},
-  "parking_surface_per_space": {{"value": <number or null>, "unit": "$/space", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "surface parking cost"}}
+  "hard_cost_per_gsf": {{"value": <number>, "unit": "$/GSF", "source_url": null, "source_name": "RSMeans / industry benchmark", "date_retrieved": "{TODAY}", "notes": "regional estimate based on city cost index"}},
+  "parking_structured_per_space": {{"value": <number>, "unit": "$/space", "source_url": null, "source_name": "industry benchmark", "date_retrieved": "{TODAY}", "notes": "structured/podium parking"}},
+  "parking_surface_per_space": {{"value": <number>, "unit": "$/space", "source_url": null, "source_name": "industry benchmark", "date_retrieved": "{TODAY}", "notes": "surface parking"}}
 }}
-
-Search: "{location} construction cost per square foot {building_type} 2025"
-Also search: "RSMeans {building_type} construction cost {location} metro 2025"
-Also search: "{location} multifamily construction cost per SF permit 2025 2026"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_market_rents(location: str, building_type: str, unit_mix: dict) -> dict:
@@ -319,61 +314,49 @@ Also search: "huduser.gov income limits {location} area median income 2025"
 
 def research_opex_benchmarks(use_type: str, building_type: str) -> dict:
     """
-    Search NMHC, NAHB, published developer proformas for operating expense benchmarks.
-    Returns $/unit/year for building type and use.
+    Returns opex benchmarks from Claude's training data (NMHC/IREM industry standards).
+    No web search — these are stable industry benchmarks.
     """
     prompt = f"""
-Search for current (2024-2026) operating expense benchmarks for {use_type} {building_type} multifamily properties.
-
-Use NMHC (National Multifamily Housing Council), NAHB, Institute of Real Estate Management (IREM), published developer proformas, and industry reports.
+Based on your knowledge of NMHC and IREM industry benchmarks, provide operating expense estimates for {use_type} {building_type} multifamily properties as of 2024-2025.
 
 Return a JSON object:
 {{
-  "total_opex_per_unit_year": {{"value": <number or null>, "unit": "$/unit/year", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "includes management, maintenance, insurance, admin"}},
-  "management_fee_pct_egi": {{"value": <decimal e.g. 0.04 or null>, "unit": "decimal (% of EGI)", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "maintenance_per_unit_year": {{"value": <number or null>, "unit": "$/unit/year", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "insurance_per_unit_year": {{"value": <number or null>, "unit": "$/unit/year", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "admin_per_unit_year": {{"value": <number or null>, "unit": "$/unit/year", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "payroll, leasing, G&A"}},
-  "capex_reserve_per_unit_year": {{"value": <number or null>, "unit": "$/unit/year", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "replacement reserve"}}
+  "total_opex_per_unit_year": {{"value": <number>, "unit": "$/unit/year", "source_url": null, "source_name": "NMHC/IREM benchmark", "date_retrieved": "{TODAY}", "notes": "includes management, maintenance, insurance, admin"}},
+  "management_fee_pct_egi": {{"value": <decimal e.g. 0.04>, "unit": "decimal (% of EGI)", "source_url": null, "source_name": "NMHC/IREM benchmark", "date_retrieved": "{TODAY}", "notes": ""}},
+  "maintenance_per_unit_year": {{"value": <number>, "unit": "$/unit/year", "source_url": null, "source_name": "NMHC/IREM benchmark", "date_retrieved": "{TODAY}", "notes": ""}},
+  "insurance_per_unit_year": {{"value": <number>, "unit": "$/unit/year", "source_url": null, "source_name": "NMHC/IREM benchmark", "date_retrieved": "{TODAY}", "notes": ""}},
+  "admin_per_unit_year": {{"value": <number>, "unit": "$/unit/year", "source_url": null, "source_name": "NMHC/IREM benchmark", "date_retrieved": "{TODAY}", "notes": "payroll, leasing, G&A"}},
+  "capex_reserve_per_unit_year": {{"value": <number>, "unit": "$/unit/year", "source_url": null, "source_name": "NMHC/IREM benchmark", "date_retrieved": "{TODAY}", "notes": "replacement reserve"}}
 }}
-
-Search: "NMHC multifamily operating expenses per unit 2024 2025"
-Also search: "IREM apartment operating costs per unit {building_type} 2025"
-Also search: "{use_type} apartment operating expense benchmark $/unit 2025"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_employment_and_demand(location: str) -> dict:
     """
-    Search Lightcast for local employment trends, wage growth, dominant industries.
-    Returns qualitative demand signals for feasibility narrative.
+    Returns employment/demand context from Claude's training data.
+    No web search — uses known economic profile of the metro area.
     """
     prompt = f"""
-Search Lightcast (lightcast.io), Bureau of Labor Statistics (bls.gov), and local economic development sources for employment and economic data in {location} or its metro area.
-
-Find: top employment sectors, recent job growth rate (%), median wage, notable employer concentrations or recent expansions, housing demand signals.
+Based on your knowledge, provide employment and economic demand context for {location} or its metro area as of 2024-2025.
 
 Return a JSON object:
 {{
   "top_sectors": [
-    {{"sector": "...", "employment_count": <number or null>, "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}}
+    {{"sector": "...", "employment_count": null, "source_url": null, "source_name": "BLS/Lightcast estimate", "date_retrieved": "{TODAY}", "notes": ""}}
   ],
-  "job_growth_rate_annual": {{"value": <decimal e.g. 0.02 or null>, "unit": "decimal (annual %)", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "most recent 12 months"}},
-  "unemployment_rate": {{"value": <decimal or null>, "unit": "decimal", "source_url": "...", "source_name": "BLS", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "median_household_income": {{"value": <$ or null>, "unit": "$/year", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "..."}},
-  "median_wage": {{"value": <$ or null>, "unit": "$/year", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "all occupations median"}},
+  "job_growth_rate_annual": {{"value": <decimal e.g. 0.02>, "unit": "decimal (annual %)", "source_url": null, "source_name": "BLS estimate", "date_retrieved": "{TODAY}", "notes": "approximate"}},
+  "unemployment_rate": {{"value": <decimal>, "unit": "decimal", "source_url": null, "source_name": "BLS estimate", "date_retrieved": "{TODAY}", "notes": "approximate"}},
+  "median_household_income": {{"value": <$>, "unit": "$/year", "source_url": null, "source_name": "Census/ACS estimate", "date_retrieved": "{TODAY}", "notes": "approximate"}},
+  "median_wage": {{"value": <$>, "unit": "$/year", "source_url": null, "source_name": "BLS estimate", "date_retrieved": "{TODAY}", "notes": "all occupations"}},
   "notable_employers": [
-    {{"name": "...", "note": "recent expansion or major employer", "source_url": "...", "date_retrieved": "{TODAY}"}}
+    {{"name": "...", "note": "major employer", "source_url": null, "date_retrieved": "{TODAY}"}}
   ],
-  "demand_narrative": {{"value": "...", "unit": "text", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "1-2 sentence summary of demand drivers for housing"}}
+  "demand_narrative": {{"value": "...", "unit": "text", "source_url": null, "source_name": "market knowledge", "date_retrieved": "{TODAY}", "notes": "1-2 sentence summary"}}
 }}
-
-Search: "Lightcast employment {location} 2025"
-Also search: "BLS metropolitan employment {location} 2025"
-Also search: "{location} job growth economy 2025 housing demand"
 """
-    return _run_research(prompt)
+    return _run_research(prompt, web_search=False)
 
 
 def research_for_sale_comps(location: str, building_type: str) -> dict:

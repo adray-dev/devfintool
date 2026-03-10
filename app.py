@@ -268,15 +268,14 @@ if run_button or (needs_refresh and "research_cache" not in st.session_state):
         )
         result_keys.append("for_sale_comps")
 
-    # Run research calls with 2 parallel workers, staggered by 10s.
-    # Staggering prevents all calls from hitting the TPM limit simultaneously.
-    # Each call has retry-with-backoff (65s+) for any 429s that slip through.
+    # Run research calls with 5 parallel workers.
+    # 3 of the 10 steps use no web search and complete in ~3-5s.
+    # The 7 web-search steps run concurrently; each does 1 search (low TPM).
     total_steps = len(research_steps)
     completed_count = [0]
     lock = threading.Lock()
 
     def _run_step(idx, label, fn, key):
-        time.sleep(idx * 10)  # 10s stagger per slot: 0, 10, 20, 30...s
         try:
             result = fn()
         except Exception as e:
@@ -288,7 +287,7 @@ if run_button or (needs_refresh and "research_cache" not in st.session_state):
             progress.progress(pct, text=f"Completed: {label}")
         return key, result
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {
             executor.submit(_run_step, i, label, fn, result_keys[i]): i
             for i, (label, fn) in enumerate(research_steps)
