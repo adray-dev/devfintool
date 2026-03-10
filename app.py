@@ -226,23 +226,8 @@ if run_button or (needs_refresh and "research_cache" not in st.session_state):
 
     progress = st.progress(0, text="Starting research...")
 
-    # ---- Step 0: Parcel research (synchronous — sets project size) ----
-    progress.progress(4, text="Looking up parcel data from government records...")
-    try:
-        parcel_data = research_parcel(location, loc_site)
-    except Exception as _pe:
-        parcel_data = {}
-        st.warning(f"Parcel research failed ({_pe}). Unit count will use 1-acre default.")
-    assumptions["parcel"] = parcel_data
-
-    _p_acres_item = parcel_data.get("parcel_area_acres", {})
-    _p_acres_val  = _p_acres_item.get("value") if isinstance(_p_acres_item, dict) else _p_acres_item
-    parcel_acres  = float(_p_acres_val) if _p_acres_val else 1.0
-    num_units     = max(1, round(UNITS_PER_ACRE[building_type] * parcel_acres))
-    user_inputs["parcel_acres"] = parcel_acres
-    user_inputs["num_units"]    = num_units
-
     research_steps = [
+        ("Looking up parcel data...",                lambda: research_parcel(location, loc_site)),
         ("Researching zoning regulations...",        lambda: research_zoning(location, building_type)),
         ("Researching land costs...",                lambda: research_land_costs(location, building_type)),
         ("Researching construction costs...",        lambda: research_construction_costs(location, building_type)),
@@ -254,7 +239,7 @@ if run_button or (needs_refresh and "research_cache" not in st.session_state):
         ("Researching employment & demand signals...", lambda: research_employment_and_demand(location)),
     ]
 
-    result_keys = ["zoning", "land", "construction", "rents", "cap_rates",
+    result_keys = ["parcel", "zoning", "land", "construction", "rents", "cap_rates",
                    "interest_rates", "tax_rates", "opex", "employment"]
 
     if use_type == "Affordable / LIHTC":
@@ -308,6 +293,14 @@ if run_button or (needs_refresh and "research_cache" not in st.session_state):
         for future in as_completed(futures):
             key, result = future.result()
             assumptions[key] = result
+
+    # Extract parcel size from research and compute unit count
+    _p_item = assumptions.get("parcel", {}).get("parcel_area_acres", {})
+    _p_val  = _p_item.get("value") if isinstance(_p_item, dict) else _p_item
+    parcel_acres = float(_p_val) if _p_val else 1.0
+    num_units    = max(1, round(UNITS_PER_ACRE[building_type] * parcel_acres))
+    user_inputs["parcel_acres"] = parcel_acres
+    user_inputs["num_units"]    = num_units
 
     progress.progress(82, text="Running financial model...")
     try:
