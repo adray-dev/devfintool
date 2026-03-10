@@ -10,7 +10,7 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
-from location_data import STATES, ALL_CITIES, CITY_TO_STATE
+from location_data import STATES
 
 from research import (
     research_zoning,
@@ -114,20 +114,14 @@ with st.sidebar:
     # ---- Location (multi-field) ----
     st.subheader("📍 Location")
 
-    loc_city = st.selectbox(
+    loc_city = st.text_input(
         "City / County",
-        [""] + ALL_CITIES,
+        placeholder="e.g. Chicago, Cook County",
         key="loc_city",
-        help="Select a city or county. Type to search.",
     )
-    # Auto-fill state from city selection
-    _auto_state = CITY_TO_STATE.get(loc_city, "")
-    _state_options = [""] + STATES
-    _state_idx = _state_options.index(_auto_state) if _auto_state in _state_options else 0
     loc_state = st.selectbox(
         "State",
-        _state_options,
-        index=_state_idx,
+        [""] + STATES,
         key="loc_state",
     )
     loc_site  = st.text_input(

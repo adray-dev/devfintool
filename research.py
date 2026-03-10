@@ -401,47 +401,94 @@ Also search: "{location} new construction condo sale price $/SF 2025"
     return _run_research(prompt)
 
 
+SYSTEM_PARCEL = """You are a property records lookup specialist. Your ONLY job is to retrieve data directly from official county assessor or city auditor websites.
+
+Rules:
+- ONLY search official government assessor/auditor/treasurer sites for the relevant county or city. Do NOT search Zillow, Redfin, news sites, or any non-government source.
+- If you cannot find the parcel on an official assessor/auditor site, set ALL values to null and set "notes" to "Not found on official assessor/auditor records".
+- Do NOT estimate, infer, or fabricate any values.
+- Return ONLY valid JSON — no preamble, no markdown.
+"""
+
+
 def research_parcel(location: str, site_identifier: str) -> dict:
     """
-    Look up official parcel data from county assessor / GIS databases.
+    Look up official parcel data from county assessor / city auditor only.
     Returns parcel area, existing improvements, zoning, and assessed value.
-    Run before all other research so parcel size drives the unit count.
+    If not found, all values are null with a "not found" note.
     """
     prompt = f"""
-Search official government property records for the specific parcel at: {site_identifier}, {location}
+Look up official property records for: {site_identifier}, {location}
 
-Look for data from:
-- The county assessor or treasurer website (e.g. cookcountyassessor.com, lacounty.gov/assessor, or the relevant county for this location)
-- The city or county GIS parcel viewer (search "[county/city name] GIS parcel viewer")
-- State parcel data portals
+ONLY search the county assessor or city auditor website for this address. For example:
+- Cook County → cookcountyassessor.com
+- Los Angeles County → assessor.lacounty.gov
+- Search: "{location} county assessor" or "{location} city auditor property search" to find the right site.
 
-Find and return ALL of the following from official government records:
-1. Parcel area in BOTH square feet AND acres (from deed or assessor records, not estimates)
-2. Official land use / property classification (e.g. "Vacant Land", "Multi-Family Residential", "Commercial Parking", "Mixed-Use")
-3. Current zoning designation (the actual code, e.g. "B3-5", "RM-5", "C-2", "DX-5")
-4. Existing building: total gross SF, number of stories, year built (set to 0 if the parcel is vacant)
-5. Most recent assessed value — land only and total (land + improvements)
-6. Whether demolition of existing structures would be required before redevelopment
-
-Search: "{site_identifier} {location} parcel assessor property records acres square feet"
-Also search: "{location} county assessor {site_identifier} land use zoning"
-Also search: "{location} GIS parcel data {site_identifier}"
-
-Return a JSON object:
+If you find the parcel on an official assessor/auditor site, return:
 {{
-  "parcel_area_acres": {{"value": <number or null>, "unit": "acres", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "from official assessor/GIS records"}},
-  "parcel_area_sf": {{"value": <number or null>, "unit": "SF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": ""}},
-  "current_land_use": {{"value": "<description>", "unit": "text", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "official land use classification"}},
-  "current_zoning": {{"value": "<zoning code>", "unit": "text", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": ""}},
-  "existing_building_sf": {{"value": <number — use 0 if vacant land>, "unit": "SF", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "gross building SF of any existing structure; 0 if vacant"}},
-  "existing_building_stories": {{"value": <number or 0>, "unit": "stories", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": ""}},
-  "existing_building_year_built": {{"value": <year or null>, "unit": "year", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "null if vacant land"}},
-  "assessed_value_land": {{"value": <number or null>, "unit": "$", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "land-only assessed value"}},
-  "assessed_value_total": {{"value": <number or null>, "unit": "$", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "total assessed value including improvements"}},
-  "demolition_required": {{"value": <true or false>, "unit": "boolean", "source_url": "...", "source_name": "...", "date_retrieved": "{TODAY}", "notes": "true if existing structures must be cleared before redevelopment"}}
+  "parcel_area_acres": {{"value": <number or null>, "unit": "acres", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": ""}},
+  "parcel_area_sf": {{"value": <number or null>, "unit": "SF", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": ""}},
+  "current_land_use": {{"value": "<description or null>", "unit": "text", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": ""}},
+  "current_zoning": {{"value": "<zoning code or null>", "unit": "text", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": ""}},
+  "existing_building_sf": {{"value": <number or 0 if vacant>, "unit": "SF", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": "0 if vacant land"}},
+  "existing_building_stories": {{"value": <number or 0>, "unit": "stories", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": ""}},
+  "existing_building_year_built": {{"value": <year or null>, "unit": "year", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": "null if vacant land"}},
+  "assessed_value_land": {{"value": <number or null>, "unit": "$", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": ""}},
+  "assessed_value_total": {{"value": <number or null>, "unit": "$", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": ""}},
+  "demolition_required": {{"value": <true or false>, "unit": "boolean", "source_url": "<assessor URL>", "source_name": "<assessor site name>", "date_retrieved": "{TODAY}", "notes": ""}}
 }}
+
+If the parcel CANNOT be found on an official assessor/auditor site, return the same JSON structure with ALL values set to null and each "notes" field set to "Not found on official assessor/auditor records".
+
+Search: "{location} county assessor property search"
 """
-    return _run_research(prompt)
+    tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}]
+    system = SYSTEM_PARCEL
+    messages = [{"role": "user", "content": prompt}]
+    client = _get_client()
+
+    max_retries = 4
+    for attempt in range(max_retries):
+        try:
+            response = client.messages.create(
+                model=MODEL,
+                max_tokens=2000,
+                system=system,
+                tools=tools,
+                messages=messages,
+            )
+            break
+        except anthropic.RateLimitError as e:
+            wait = 65 + 30 * attempt
+            if attempt < max_retries - 1:
+                time.sleep(wait)
+            else:
+                raise e
+
+    text_parts = []
+    for block in response.content:
+        if hasattr(block, "text"):
+            text_parts.append(block.text)
+    full_text = "\n".join(text_parts).strip()
+
+    json_match = re.search(r"```(?:json)?\s*([\s\S]+?)```", full_text)
+    if json_match:
+        json_str = json_match.group(1).strip()
+    else:
+        json_match = re.search(r"(\{[\s\S]+\}|\[[\s\S]+\])", full_text)
+        json_str = json_match.group(1) if json_match else full_text
+
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        not_found_note = "Not found on official assessor/auditor records"
+        return {k: {"value": None, "unit": "", "source_url": None, "source_name": None,
+                    "date_retrieved": TODAY, "notes": not_found_note}
+                for k in ["parcel_area_acres", "parcel_area_sf", "current_land_use",
+                           "current_zoning", "existing_building_sf", "existing_building_stories",
+                           "existing_building_year_built", "assessed_value_land",
+                           "assessed_value_total", "demolition_required"]}
 
 
 def research_lihtc_rules(state: str, lihtc_type: str) -> dict:
